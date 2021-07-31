@@ -1,0 +1,106 @@
+version: "3"
+volumes: 
+  api_volume_db: 
+services: 
+  db:
+    image: mysql:latest
+    networks:
+      - sub-etha
+    volumes: 
+      - api_volume_db:/data/db
+      - ./dbconfig.cnf:/etc/mysql/conf.d/custom.cnf:ro
+      - ./dbinit.sql:/data/db/init.sql:ro
+    restart: always
+    environment: 
+      MYSQL_DATABASE: unity_test
+      MYSQL_ROOT_PASSWORD: password
+    command: 
+      --default-authentication-plugin=mysql_native_password
+      --init-file /data/db/init.sql
+    healthcheck:
+      test: ["CMD","mysqladmin","ping","-h","localhost"]
+      timeout: 5s
+      retries: 50
+  save_api_unity: 
+    build: save_api_unity/
+    container_name: save_api_unity
+    networks:
+      - sub-etha
+    restart: always
+    depends_on: 
+      db: 
+        condition: service_healthy
+    volumes: 
+      - /usr/src/app/save_api_unity/node_modules
+      - ./save_api_unity/src:/usr/src/app/save_api_unity/src
+    environment: 
+      TZ: Europe/Moscow
+      NODE_ENV: development
+      JWT_ACCESS_SECRET: secret1
+      JWT_REFRESH_SECRET: secret2
+      MYSQL_DB_ADDR: db
+      MYSQL_DB_NAME: unity_test
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: password
+      MYSQL_PORT: 3306
+      APP_SERVER_PORT: 3000
+    healthcheck:
+      test: ["CMD","curl","-sS","localhost:3000"]
+      timeout: 5s
+      retries: 50
+  file_api:
+    build: file_api/
+    container_name: file_api
+    networks:
+      - sub-etha
+    restart: always
+    volumes: 
+      - /usr/src/app/file_api/node_modules
+      - ./file_api/src:/usr/src/app/file_api/src
+    environment: 
+      TZ: Europe/Moscow
+      NODE_ENV: development
+      FILE_SERVER_PORT: 3000
+      CLIENT_URL: http://localhost:3000
+      JWT_ACCESS_SECRET: secret1
+      JWT_REFRESH_SECRET: secret2
+    healthcheck:
+      test: ["CMD","curl","-sS","localhost:3000"]
+      timeout: 5s
+      retries: 50
+  bye_bye_world:
+    build: ./bye_bye_world/
+    networks: 
+      sub-etha:
+    restart: always
+    depends_on: 
+      file_api: 
+        condition: service_healthy
+      save_api_unity: 
+        condition: service_healthy
+    volumes: 
+      - ./bye_bye_world/src:/usr/src/app/bye_bye_world/src 
+      - /usr/src/app/bye_bye_world/node_modules
+    environment: 
+      TZ: Europe/Moscow
+      NODE_ENV: development
+      CHOKIDAR_USEPOLLING: 1
+    healthcheck:
+      test: ["CMD","curl","-sS","localhost:8080"]
+      timeout: 5s
+      retries: 50
+  revproxy:
+    build: ./proxy
+    image: "reverseproxy:1.0.0"
+    depends_on: 
+      file_api: 
+        condition: service_healthy
+      save_api_unity: 
+        condition: service_healthy
+    networks:
+      - sub-etha
+    ports:
+      - "3000:3000"
+    command: [nginx-debug,'-g','daemon off;'] 
+networks:
+  sub-etha:    
