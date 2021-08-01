@@ -7,6 +7,6 @@ module.exports = {
   },
   development: {
     jwtSecret: 'secret',
-    port: process.env.FILE_SERVER_PORT
+    port: 80
   }
 }

@@ -3,5 +3,5 @@ RUN mkdir -p /usr/src/app/file_api
 WORKDIR /usr/src/app/file_api
 COPY package*.json ./
 RUN npm install
-EXPOSE 3000
+EXPOSE 80
 CMD ["npm","run","dev"]
